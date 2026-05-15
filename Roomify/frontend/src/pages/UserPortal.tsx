@@ -249,12 +249,6 @@ export const UserPortal: React.FC = () => {
     setStatusMsg('');
 
     try {
-      const dateParams = new URLSearchParams({
-        check_in: bookingDates.check_in,
-        check_out: bookingDates.check_out
-
-      });
-      navigate(`/rooms?${dateParams.toString()}`);
       const [profileResponse, bookingsResponse, membershipResponse, invoicesResponse, preferencesResponse] =
         await Promise.all([
           fetch(`${API_BASE_URL}/api/user/profile`, { headers: authHeaders() }),
