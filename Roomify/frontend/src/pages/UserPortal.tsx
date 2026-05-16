@@ -27,6 +27,7 @@ import {
 import { API_BASE_URL } from '../config/api';
 import { readApiResponse } from '../utils/apiResponse';
 import { offers as fallbackOffers } from '../data/luxuryHotel';
+import { AiConcierge } from '../components/AiConcierge';
 
 type BookingAddonId = 'airport' | 'breakfast' | 'spa';
 const addonOptions: { id: BookingAddonId; title: string; price: number }[] = [
@@ -951,6 +952,18 @@ export const UserPortal: React.FC = () => {
             onRebook={setRebooking}
             isWorking={isWorking}
           />
+        </section>
+
+        {/* ── AI Concierge embedded panel ── */}
+        <section className="mb-12">
+          <div className="mb-6">
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#e7c987] mb-2">AI Concierge</p>
+            <h2 className="text-4xl font-luxury font-black text-white">Chat with Aria</h2>
+            <p className="text-white/50 font-medium mt-1">Your personal hotel concierge — ask about rooms, dining, offers, or anything about your stay.</p>
+          </div>
+          <div className="rounded-[28px] border border-white/10 bg-[#0d0b09] overflow-hidden" style={{ height: '560px' }}>
+            <AiConcierge embedded />
+          </div>
         </section>
       </main>
 
