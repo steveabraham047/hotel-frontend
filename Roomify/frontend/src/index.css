@@ -63,3 +63,8 @@ html {
 .animate-luxury-fade {
   animation: luxury-fade 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40%            { transform: translateY(-6px); opacity: 1; }
+}

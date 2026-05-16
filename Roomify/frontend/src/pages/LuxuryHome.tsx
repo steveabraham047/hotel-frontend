@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AiConcierge } from '../components/AiConcierge';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -182,7 +183,7 @@ export const LuxuryHome: React.FC = () => {
   const [bookingRoom, setBookingRoom] = useState<LuxuryRoom | null>(null);
   const [bookingStep, setBookingStep] = useState(1);
   const [bookingNotice, setBookingNotice] = useState('');
-  const [showAiNotice, setShowAiNotice] = useState(false);
+  // AI Concierge state removed — now handled inside <AiConcierge />
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 36);
@@ -614,30 +615,8 @@ export const LuxuryHome: React.FC = () => {
         <ContactSection />
       </main>
 
-      <button
-        onClick={() => setShowAiNotice(true)}
-        className="fixed bottom-6 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-[#d6b16a] text-black shadow-[0_18px_55px_rgba(214,177,106,0.35)] transition hover:scale-105"
-        aria-label="AI assistant coming soon"
-      >
-        <MessageCircle className="h-7 w-7" />
-      </button>
-
-      {showAiNotice && (
-        <div className="fixed bottom-28 right-6 z-50 w-[min(360px,calc(100vw-32px))] rounded-[28px] border border-white/15 bg-black/85 p-5 text-white shadow-2xl backdrop-blur-2xl">
-          <div className="mb-4 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-[#e7c987]">AI Concierge</p>
-              <h3 className="mt-2 font-luxury text-3xl">Coming soon</h3>
-            </div>
-            <button onClick={() => setShowAiNotice(false)} aria-label="Close AI notice">
-              <X className="h-5 w-5 text-white/60" />
-            </button>
-          </div>
-          <p className="leading-7 text-white/68">
-            Room recommendations, offer explanations, dining suggestions, and booking help are reserved for the next AI phase.
-          </p>
-        </div>
-      )}
+      {/* ── AI Concierge floating widget ── */}
+      <AiConcierge />
 
       {selectedRoom && (
         <RoomDetailsModal
