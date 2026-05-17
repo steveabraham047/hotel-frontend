@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, User, Phone, Mail, Calendar, Home, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
 export const ReceptionistPortal: React.FC = () => {
   const [step, setStep] = useState(1);
@@ -24,7 +25,7 @@ export const ReceptionistPortal: React.FC = () => {
     const fetchRooms = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('https://hotel-management-system-1-ejha.onrender.com/api/rooms', {
+        const response = await fetch(`${API_BASE_URL}/api/rooms`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -57,7 +58,7 @@ export const ReceptionistPortal: React.FC = () => {
       const token = localStorage.getItem('token');
       
       // Sending data to your secure backend
-      const response = await fetch('https://hotel-management-system-1-ejha.onrender.com/api/bookings', {
+      const response = await fetch(`${API_BASE_URL}/api/bookings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
