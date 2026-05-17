@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Bell, CheckCircle2, Clock, AlertTriangle,
   BedDouble, Waves, Coffee, Snowflake, UtensilsCrossed,
-  Wrench, Sparkles, Send, ChevronDown, ChevronUp, X
+  Wrench, Sparkles, Send, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 

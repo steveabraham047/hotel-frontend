@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../config/api';
-import { Bell, CheckCircle2, Clock, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { Bell, CheckCircle2, Clock,  Loader2, RefreshCw } from 'lucide-react';
 
 const STATUS_BADGE: Record<string, string> = {
   'Pending':     'bg-yellow-100 text-yellow-800 border border-yellow-200',

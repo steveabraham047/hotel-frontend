@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { API_BASE_URL } from '../config/api';
-import { MapPin, Navigation, Utensils, Church, ShoppingBag, Trees, Landmark, Heart, AlertCircle } from 'lucide-react';
+import { MapPin, Navigation, Utensils, Church, ShoppingBag, Trees, Landmark, Heart } from 'lucide-react';
 
 // Fix Leaflet default marker icon issue in Vite builds
 delete (L.Icon.Default.prototype as any)._getIconUrl;

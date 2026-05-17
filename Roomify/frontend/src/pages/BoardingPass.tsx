@@ -14,7 +14,7 @@ export const BoardingPass: React.FC = () => {
       try {
         const token = localStorage.getItem('token') || localStorage.getItem('guestToken');
         // If guest token, hit /api/user/bookings, if staff hit /api/guests
-        let url = `${API_BASE_URL}/api/guests`;
+       //let url = `${API_BASE_URL}/api/guests`;
         let headers: any = { 'Authorization': `Bearer ${token}` };
         
         // Let's just hit both and see which one works, or we can check role.
