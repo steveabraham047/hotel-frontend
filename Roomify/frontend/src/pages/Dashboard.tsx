@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
-
-// Premium, moody, natural aesthetic image array to replace the broken Unsplash API
-const PREMIUM_ROOM_IMAGES = [
-  "https://images.unsplash.com/photo-1618773928121-c32242e63f39?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1566665797739-1674de7a421a?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1590490359683-658d34c8f11f?q=80&w=600&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1536270560716-16ce345097bc?q=80&w=600&auto=format&fit=crop"
-];
+import { BarChart, DonutChart, ChartLegend } from '../components/Charts';
+import { FloorMap } from '../components/FloorMap';
+import { InvoicePDF } from '../components/InvoicePDF';
 
 export const Dashboard: React.FC = () => {
   // Room & API States
@@ -31,8 +24,12 @@ export const Dashboard: React.FC = () => {
   const [checkoutStep, setCheckoutStep] = useState<'preview' | 'confirm'>('preview');
 
   // Live Metrics & Modal State
+  // Live Metrics & Modal State
   const [metrics, setMetrics] = useState({ arrivals: 0, hosted: 0, revenue: 0, roomRevenue: 0, posRevenue: 0 });
+  const [chartData, setChartData] = useState<any>(null);
+  const [insights, setInsights] = useState<any>(null);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
+  const [showInvoicePdf, setShowInvoicePdf] = useState(false);
   
   const navigate = useNavigate();
 
@@ -49,13 +46,16 @@ export const Dashboard: React.FC = () => {
       setRooms(roomData); 
 
       // Fetch Real Live Analytics
-      const analyticsRes = await fetch(`${API_BASE_URL}/api/analytics/dashboard`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (analyticsRes.ok) {
-        const analyticsData = await analyticsRes.json();
-        setMetrics(analyticsData);
-      }
+      // Fetch Real Live Analytics & Charts
+      const [dashRes, chartsRes, insightsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/analytics/dashboard`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/api/analytics/charts`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/api/analytics/insights`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+      
+      if (dashRes.ok) setMetrics(await dashRes.json());
+      if (chartsRes.ok) setChartData(await chartsRes.json());
+      if (insightsRes?.ok) setInsights(await insightsRes.json());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -143,6 +143,21 @@ export const Dashboard: React.FC = () => {
 
   return (
     <>
+      <div className="flex justify-between items-end mb-6">
+        <div>
+          <h1 className="text-4xl font-black text-primary font-headline">Command Center</h1>
+          <p className="text-primary/60 font-bold mt-1">Live metrics and analytics</p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={() => window.open(`${API_BASE_URL}/api/analytics/export/bookings?token=${localStorage.getItem('token')}`, '_blank')} className="px-4 py-2 bg-white/60 backdrop-blur-md rounded-xl text-xs font-black uppercase text-primary/70 hover:bg-white hover:text-primary transition-all flex items-center gap-2 shadow-sm border border-white/40">
+            <span className="material-symbols-outlined text-sm">download</span> Bookings
+          </button>
+          <button onClick={() => window.open(`${API_BASE_URL}/api/analytics/export/invoices?token=${localStorage.getItem('token')}`, '_blank')} className="px-4 py-2 bg-white/60 backdrop-blur-md rounded-xl text-xs font-black uppercase text-primary/70 hover:bg-white hover:text-primary transition-all flex items-center gap-2 shadow-sm border border-white/40">
+            <span className="material-symbols-outlined text-sm">download</span> Invoices
+          </button>
+        </div>
+      </div>
+
       {/* --- UPGRADED PREMIUM METRICS ROW --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
         
@@ -205,75 +220,92 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Room Status Widget Section */}
-      <section className="mt-16">
-        <div className="flex justify-between items-end mb-8">
-          <div>
-            <h3 className="text-3xl font-extrabold text-primary font-headline leading-tight">Live Directory</h3>
-            <p className="text-primary/60 font-medium mt-1">Real-time physical inventory mapped to your secure MySQL Backend</p>
+      {/* --- NEW TIER 1 CHARTS SECTION --- */}
+      {chartData && (
+        <section className="mb-16 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white/60 backdrop-blur-xl p-8 rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
+            <h3 className="text-xl font-black text-primary font-headline mb-6">Revenue Timeline (7 Days)</h3>
+            <BarChart 
+              data={chartData.revenueTimeline.map((d: any) => ({ label: d.label, value: d.total_revenue }))}
+              unit="₹"
+            />
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8">
-          {rooms.map((room, i) => (
-            <div key={room.room_id} className={`group bg-white/60 backdrop-blur-3xl rounded-3xl overflow-hidden border border-white/60 hover:bg-white/80 transition-all duration-500 shadow-lg hover:shadow-[0_20px_40px_rgba(0,0,0,0.1)] ${i % 2 !== 0 ? 'xl:translate-y-8' : ''}`}>
-              <div className="relative h-56 overflow-hidden bg-primary/10">
-                <img 
-                  className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
-                  src={PREMIUM_ROOM_IMAGES[i % PREMIUM_ROOM_IMAGES.length]} 
-                  alt={`Room ${room.room_number}`} 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-60"></div>
-                
-                <div className={`absolute top-4 right-4 px-4 py-1.5 rounded-full text-xs font-black tracking-wider shadow-lg backdrop-blur-md border border-white/20
-                  ${room.status === 'Available' || room.status === 'AVAILABLE' ? 'bg-emerald-500/80 text-white' : 
-                    room.status === 'Occupied' || room.status === 'OCCUPIED' ? 'bg-red-500/80 text-white' : 
-                    'bg-amber-500/80 text-white'}`}>
-                  {room.status.toUpperCase()}
-                </div>
-                
-                <div className="absolute bottom-4 left-4">
-                   <h4 className="text-2xl font-black text-white font-headline drop-shadow-md">Room {room.room_number}</h4>
-                   <span className="text-sm text-white/80 font-bold block drop-shadow-md">{room.type}</span>
-                </div>
-              </div>
+          <div className="bg-white/60 backdrop-blur-xl p-8 rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] flex items-center justify-between">
+             <div>
+               <h3 className="text-xl font-black text-primary font-headline mb-2">Room Type Breakdown</h3>
+               <p className="text-sm font-bold text-primary/50 mb-6">Current distribution</p>
+               <ChartLegend items={chartData.roomTypeBreakdown.map((r: any, i: number) => ({
+                 label: r.type,
+                 value: r.count.toString(),
+                 color: ['#006B5C', '#00C9A7', '#1D4ED8', '#8B5CF6'][i % 4]
+               }))} />
+             </div>
+             <DonutChart 
+               data={chartData.roomTypeBreakdown.map((r: any, i: number) => ({ 
+                 label: r.type, 
+                 value: r.count, 
+                 color: ['#006B5C', '#00C9A7', '#1D4ED8', '#8B5CF6'][i % 4] 
+               }))}
+               centerValue={chartData.totalRooms?.toString()}
+               centerLabel="TOTAL ROOMS"
+             />
+          </div>
+        </section>
+      )}
 
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex items-center gap-3 text-primary/40 text-sm">
-                    <span className="flex items-center gap-1 bg-surface-variant/50 p-2 rounded-lg"><span className="material-symbols-outlined text-sm">wifi</span></span>
-                    <span className="flex items-center gap-1 bg-surface-variant/50 p-2 rounded-lg"><span className="material-symbols-outlined text-sm">tv</span></span>
-                    <span className="flex items-center gap-1 bg-surface-variant/50 p-2 rounded-lg"><span className="material-symbols-outlined text-sm">ac_unit</span></span>
-                  </div>
-                  <span className="text-xl font-black text-secondary">₹{Number(room.price_per_night).toLocaleString('en-IN')}</span>
-                </div>
-                
-                <button 
-                  onClick={() => {
-                    if (room.status === 'Available' || room.status === 'AVAILABLE') {
-                      navigate('/dashboard/new-booking');
-                    } else if (room.status === 'Occupied' || room.status === 'OCCUPIED') {
-                      handleOpenCheckout(room); 
-                    }
-                  }}
-                  disabled={room.status === 'Maintenance' || room.status === 'MAINTENANCE'}
-                  className={`w-full py-4 rounded-xl font-black tracking-wide transition-all border-2 
-                    ${room.status === 'Available' || room.status === 'AVAILABLE' 
-                      ? 'bg-transparent border-primary text-primary hover:bg-primary hover:text-white' 
-                      : room.status === 'Occupied' || room.status === 'OCCUPIED'
-                      ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-600 hover:text-white hover:border-red-600'
-                      : 'bg-surface-variant border-outline-variant/30 text-on-surface-variant/50 cursor-not-allowed'
-                    }`}
-                >
-                  {(room.status === 'Available' || room.status === 'AVAILABLE') ? 'Book Room' : 
-                   (room.status === 'Occupied' || room.status === 'OCCUPIED') ? 'Manage Check-out' : 
-                   'Under Maintenance'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* --- TIER 4: INSIGHTS & FORECASTING --- */}
+      {insights && (
+        <section className="mb-16 grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="bg-white/60 backdrop-blur-xl p-8 rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)] col-span-2">
+            <h3 className="text-xl font-black text-primary font-headline mb-6">Revenue Forecast (30 Days)</h3>
+            {insights.forecast.length > 0 ? (
+              <BarChart 
+                data={insights.forecast.map((f: any) => ({ 
+                  label: new Date(f.day).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }), 
+                  value: f.expected_revenue,
+                  color: 'linear-gradient(to top, #8B5CF6, #C4B5FD)'
+                }))}
+                unit="₹"
+              />
+            ) : (
+               <p className="text-primary/50 font-bold text-sm">No upcoming bookings found to generate forecast.</p>
+            )}
+          </div>
+          
+          <div className="bg-white/60 backdrop-blur-xl p-8 rounded-3xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
+             <h3 className="text-xl font-black text-primary font-headline mb-2">Guest Segmentation</h3>
+             <p className="text-sm font-bold text-primary/50 mb-6">Customer intelligence</p>
+             <div className="space-y-4 mt-6">
+                {insights.segmentation.map((seg: any) => {
+                  const total = insights.segmentation.reduce((acc: number, curr: any) => acc + curr.count, 0);
+                  const pct = total > 0 ? Math.round((seg.count / total) * 100) : 0;
+                  return (
+                    <div key={seg.segment}>
+                      <div className="flex justify-between text-sm font-black text-primary mb-1">
+                        <span>{seg.segment}</span>
+                        <span>{pct}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-surface-variant/50 rounded-full overflow-hidden">
+                         <div className="h-full bg-secondary rounded-full" style={{ width: `${pct}%` }}></div>
+                      </div>
+                      <div className="text-right text-[10px] font-bold text-primary/40 mt-1">{seg.count} Guests</div>
+                    </div>
+                  );
+                })}
+             </div>
+          </div>
+        </section>
+      )}
+
+      {/* --- NEW TIER 1 FLOOR MAP --- */}
+      <FloorMap 
+        rooms={rooms}
+        onAction={(room, action) => {
+          if (action === 'checkin') navigate('/dashboard/new-booking');
+          else if (action === 'checkout') handleOpenCheckout(room);
+        }}
+      />
 
       {/* --- CHECKOUT & INVOICE MODAL --- */}
       {checkoutRoom && (
@@ -435,11 +467,11 @@ export const Dashboard: React.FC = () => {
 
                 <div className="flex gap-4 print:hidden">
                   <button 
-                    onClick={() => window.print()}
+                    onClick={() => setShowInvoicePdf(true)}
                     className="flex-1 py-4 bg-secondary hover:bg-secondary-container text-white font-bold tracking-widest uppercase rounded-2xl flex justify-center items-center gap-2 transition-all shadow-xl active:scale-95"
                   >
                     <span className="material-symbols-outlined">print</span>
-                    Print / Save PDF
+                    Download PDF
                   </button>
                   <button 
                     onClick={() => { setCheckoutRoom(null); setCheckoutSuccess(false); setFinalInvoiceData(null); setPreviewData(null); setCheckoutStep('preview'); }}
@@ -505,6 +537,26 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* --- TIER 1: INVOICE PDF OVERLAY --- */}
+      {showInvoicePdf && finalInvoiceData && checkoutRoom && (
+        <InvoicePDF 
+          invoice={{
+            invoice_no: finalInvoiceData.invoiceNo,
+            room_total: finalInvoiceData.roomSubtotal,
+            restaurant_total: finalInvoiceData.foodTotal,
+            addon_total: finalInvoiceData.addonTotal,
+            grand_total: finalInvoiceData.grandTotal,
+            payment_status: 'Paid',
+            check_in: previewData?.booking?.check_in || new Date().toISOString(),
+            check_out: previewData?.booking?.check_out || new Date().toISOString(),
+            room_number: checkoutRoom.room_number,
+            room_type: checkoutRoom.type,
+            guest_name: previewData?.guest?.name || 'Guest'
+          }}
+          onClose={() => setShowInvoicePdf(false)}
+        />
       )}
     </>
   );

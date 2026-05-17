@@ -81,6 +81,14 @@ export const SideNavBar: React.FC<SideNavBarProps> = ({ isOpen, onClose }) => {
               <span className="material-symbols-outlined">inventory_2</span>
               <span className="font-body">Bookings</span>
             </NavLink>
+            <NavLink to="/dashboard/housekeeping" className={getNavLinkClass} onClick={onClose}>
+              <span className="material-symbols-outlined">cleaning_services</span>
+              <span className="font-body">Housekeeping</span>
+            </NavLink>
+            <NavLink to="/dashboard/service-queue" className={getNavLinkClass} onClick={onClose}>
+              <span className="material-symbols-outlined">room_service</span>
+              <span className="font-body">Service Queue</span>
+            </NavLink>
           </>
         )}
 
@@ -109,9 +117,21 @@ export const SideNavBar: React.FC<SideNavBarProps> = ({ isOpen, onClose }) => {
               <span className="material-symbols-outlined">restaurant_menu</span>
               <span className="font-body">Dining Highlights</span>
             </NavLink>
+            <NavLink to="/dashboard/pricing" className={getNavLinkClass} onClick={onClose}>
+              <span className="material-symbols-outlined">price_change</span>
+              <span className="font-body">Dynamic Pricing</span>
+            </NavLink>
+            <NavLink to="/dashboard/reviews" className={getNavLinkClass} onClick={onClose}>
+              <span className="material-symbols-outlined">reviews</span>
+              <span className="font-body">Reviews</span>
+            </NavLink>
             <NavLink to="/dashboard/staff" className={getNavLinkClass} onClick={onClose}>
               <span className="material-symbols-outlined">badge</span>
               <span className="font-body">Manage Staff</span>
+            </NavLink>
+            <NavLink to="/dashboard/audit" className={getNavLinkClass} onClick={onClose}>
+              <span className="material-symbols-outlined">history</span>
+              <span className="font-body">Audit Log</span>
             </NavLink>
           </>
         )}

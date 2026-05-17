@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search,  Plus } from 'lucide-react';
+import { Search,  Plus, X, History, FileText } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 
 const roomTypes = ['Standard', 'Deluxe', 'Suite', 'Premium', 'Family', 'Luxury'];
@@ -12,6 +12,12 @@ export const Bookings: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
   const [loading, setLoading] = useState(true);
+  
+  // Feature 19: Timeline Modal
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [bookingHistory, setBookingHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,10 +38,28 @@ export const Bookings: React.FC = () => {
     fetchBookings();
   }, []);
 
+  const fetchHistory = async (booking: any) => {
+    setSelectedBooking(booking);
+    setHistoryLoading(true);
+    setBookingHistory([]);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/bookings/${booking.booking_id}/history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBookingHistory(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const filteredBookings = useMemo(() => {
     let filtered = [...bookings];
-
-    // Text search
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(b =>
@@ -45,17 +69,12 @@ export const Bookings: React.FC = () => {
         (b.email && b.email.toLowerCase().includes(term))
       );
     }
-
-    // Status filter
     if (statusFilter !== 'All') {
       filtered = filtered.filter(b => b.status === statusFilter);
     }
-
-    // Room type filter
     if (typeFilter !== 'All') {
       filtered = filtered.filter(b => b.room_type === typeFilter);
     }
-
     return filtered;
   }, [bookings, searchTerm, statusFilter, typeFilter]);
 
@@ -78,7 +97,7 @@ export const Bookings: React.FC = () => {
         </button>
       </div>
 
-      {/* Search & Filters — now functional */}
+      {/* Search & Filters */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="w-5 h-5 text-primary/40 absolute left-4 top-1/2 -translate-y-1/2" />
@@ -96,9 +115,7 @@ export const Bookings: React.FC = () => {
             onChange={e => setTypeFilter(e.target.value)}
             className="px-4 py-3 bg-white/60 border border-white/40 rounded-2xl text-primary font-bold text-sm outline-none cursor-pointer"
           >
-            <option value="All">
-              All Room Types
-            </option>
+            <option value="All">All Room Types</option>
             {roomTypes.map(t => (
               <option key={t} value={t}>{t}</option>
             ))}
@@ -116,7 +133,6 @@ export const Bookings: React.FC = () => {
         </div>
       </div>
 
-      {/* Results count */}
       {!loading && (
         <p className="mb-4 text-sm font-bold text-primary/50">
           Showing {filteredBookings.length} of {bookings.length} bookings
@@ -140,7 +156,11 @@ export const Bookings: React.FC = () => {
               <tr><td colSpan={5} className="p-10 text-center font-bold text-primary/50">Loading database...</td></tr>
             ) : filteredBookings.length > 0 ? (
               filteredBookings.map((b) => (
-                <tr key={b.booking_id} className="border-b border-outline-variant/10 hover:bg-white/80 transition-colors group">
+                <tr 
+                  key={b.booking_id} 
+                  className="border-b border-outline-variant/10 hover:bg-white/80 transition-colors group cursor-pointer"
+                  onClick={() => fetchHistory(b)}
+                >
                   <td className="p-6 font-medium text-primary/50 text-sm">BK-{b.booking_id.toString().padStart(4, '0')}</td>
                   <td className="p-6">
                     <div className="flex items-center gap-3">
@@ -173,6 +193,62 @@ export const Bookings: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* TIER 4: Booking Timeline Modal */}
+      {selectedBooking && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative border border-white/20">
+            <button 
+              onClick={() => setSelectedBooking(null)}
+              className="absolute top-6 right-6 text-primary/40 hover:text-red-500 transition-colors bg-surface-variant/50 p-2 rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-secondary/10 rounded-xl text-secondary">
+                 <History className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-headline font-black text-primary">Booking Timeline</h3>
+                <p className="text-primary/60 text-xs font-bold uppercase tracking-widest mt-1">BK-{selectedBooking.booking_id.toString().padStart(4, '0')} • {selectedBooking.guest_name}</p>
+              </div>
+            </div>
+
+            <div className="bg-surface-variant/30 rounded-2xl p-6 border border-outline-variant/20 max-h-80 overflow-y-auto">
+               {historyLoading ? (
+                  <p className="text-center font-bold text-primary/50 py-4">Loading history...</p>
+               ) : bookingHistory.length > 0 ? (
+                  <div className="relative border-l-2 border-secondary/30 ml-3 space-y-6">
+                     {bookingHistory.map((event, index) => (
+                        <div key={index} className="relative pl-6">
+                           <div className="absolute w-3 h-3 bg-secondary rounded-full -left-[7px] top-1.5 shadow-[0_0_10px_rgba(0,201,167,0.5)]"></div>
+                           <p className="text-xs font-black text-primary/40 mb-1">{new Date(event.created_at).toLocaleString()}</p>
+                           <p className="text-sm font-bold text-primary">{event.status}</p>
+                           <p className="text-sm text-primary/70">{event.notes}</p>
+                           <p className="text-xs text-primary/40 italic mt-1">By {event.created_by}</p>
+                        </div>
+                     ))}
+                  </div>
+               ) : (
+                  <p className="text-center font-bold text-primary/50 py-4">No history recorded.</p>
+               )}
+            </div>
+
+            {/* Feature 11: Digital Boarding Pass trigger */}
+            <div className="mt-6 pt-6 border-t border-outline-variant/20 flex gap-4">
+               <button 
+                 onClick={() => window.open(`/dashboard/bookings/${selectedBooking.booking_id}/boarding-pass`, '_blank')}
+                 className="flex-1 py-3 bg-secondary text-white font-bold tracking-widest uppercase rounded-2xl hover:bg-secondary-container transition-all text-sm flex items-center justify-center gap-2 shadow-lg"
+               >
+                 <FileText className="w-4 h-4" />
+                 Boarding Pass
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -14,16 +14,22 @@ import {
   IndianRupee,
   Key,
   LogOut,
+  MapPin,
   Minus,
   Plus,
+  QrCode,
   Repeat2,
+  Send,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
+  Star,
   UtensilsCrossed,
   UserRound,
   X
 } from 'lucide-react';
+import { NearbyAttractionsMap } from '../components/NearbyAttractionsMap';
+import { ServiceRequestPanel } from '../components/ServiceRequestPanel';
 import { API_BASE_URL } from '../config/api';
 import { readApiResponse } from '../utils/apiResponse';
 import { offers as fallbackOffers } from '../data/luxuryHotel';
@@ -55,6 +61,9 @@ interface Room {
   room_number: string;
   type: string;
   price_per_night: string | number;
+  dynamic_price?: string | number;
+  base_price?: string | number;
+  price_multiplier?: number;
   status: string;
 }
 
@@ -93,6 +102,37 @@ interface Invoice {
   check_out: string;
   room_number: string;
   room_type: string;
+}
+
+interface DigitalKey {
+  booking_id: number;
+  access_code: string;
+  qr_payload: string;
+  issued_at: string;
+  expires_at: string;
+  status: string;
+  room_number: string;
+  room_type: string;
+  check_in: string;
+  check_out: string;
+}
+
+interface EligibleReview {
+  booking_id: number;
+  room_number: string;
+  room_type: string;
+  check_in: string;
+  check_out: string;
+}
+
+interface ReviewForm {
+  booking_id: number;
+  overall_rating: number;
+  cleanliness_rating: number;
+  dining_rating: number;
+  staff_rating: number;
+  title: string;
+  comment: string;
 }
 
 interface Membership {
@@ -218,6 +258,18 @@ export const UserPortal: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [digitalKey, setDigitalKey] = useState<DigitalKey | null>(null);
+  const [eligibleReviews, setEligibleReviews] = useState<EligibleReview[]>([]);
+  const [reviewForm, setReviewForm] = useState<ReviewForm>({
+    booking_id: 0,
+    overall_rating: 5,
+    cleanliness_rating: 5,
+    dining_rating: 5,
+    staff_rating: 5,
+    title: '',
+    comment: ''
+  });
+  const [reviewWorking, setReviewWorking] = useState(false);
 
   // Feature 1: Room Service
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -250,13 +302,15 @@ export const UserPortal: React.FC = () => {
     setStatusMsg('');
 
     try {
-      const [profileResponse, bookingsResponse, membershipResponse, invoicesResponse, preferencesResponse] =
+      const [profileResponse, bookingsResponse, membershipResponse, invoicesResponse, preferencesResponse, keyResponse, reviewResponse] =
         await Promise.all([
           fetch(`${API_BASE_URL}/api/user/profile`, { headers: authHeaders() }),
           fetch(`${API_BASE_URL}/api/user/bookings`, { headers: authHeaders() }),
           fetch(`${API_BASE_URL}/api/user/membership`, { headers: authHeaders() }),
           fetch(`${API_BASE_URL}/api/user/invoices`, { headers: authHeaders() }),
-          fetch(`${API_BASE_URL}/api/user/preferences`, { headers: authHeaders() })
+          fetch(`${API_BASE_URL}/api/user/preferences`, { headers: authHeaders() }),
+          fetch(`${API_BASE_URL}/api/user/digital-key`, { headers: authHeaders() }),
+          fetch(`${API_BASE_URL}/api/user/reviews/eligible`, { headers: authHeaders() })
         ]);
 
       if (profileResponse.status === 401 || profileResponse.status === 403) {
@@ -269,6 +323,8 @@ export const UserPortal: React.FC = () => {
       const membershipData = await readApiResponse<Membership | { error?: string }>(membershipResponse);
       const invoicesData = await readApiResponse<Invoice[] | { error?: string }>(invoicesResponse);
       const preferencesData = await readApiResponse<PreferencesResponse>(preferencesResponse);
+      const keyData = await readApiResponse<{ key: DigitalKey | null; error?: string }>(keyResponse);
+      const reviewData = await readApiResponse<EligibleReview[] | { error?: string }>(reviewResponse);
 
       if (!profileResponse.ok || !profileData.guest) throw new Error(profileData.error || 'Could not load profile.');
       if (!bookingsResponse.ok || !Array.isArray(bookingsData)) throw new Error(('error' in bookingsData && bookingsData.error) || 'Could not load bookings.');
@@ -285,6 +341,14 @@ export const UserPortal: React.FC = () => {
       setPreferences(preferencesData.preferences);
       setSavedRooms(preferencesData.savedRooms);
       setSavedOffers(preferencesData.savedOffers);
+      setDigitalKey(keyResponse.ok ? keyData.key : null);
+      if (reviewResponse.ok && Array.isArray(reviewData)) {
+        setEligibleReviews(reviewData);
+        setReviewForm((current) => ({
+          ...current,
+          booking_id: current.booking_id || reviewData[0]?.booking_id || 0
+        }));
+      }
 
       // Pre-fetch room service data so it's ready and history is visible
       await fetchRoomServiceData();
@@ -652,6 +716,38 @@ export const UserPortal: React.FC = () => {
     await fetchRoomServiceData();
   };
 
+  const handleReviewRatingChange = (key: keyof Pick<ReviewForm, 'overall_rating' | 'cleanliness_rating' | 'dining_rating' | 'staff_rating'>, value: number) => {
+    setReviewForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewForm.booking_id) {
+      setStatusMsg('Choose a completed stay before submitting feedback.');
+      return;
+    }
+
+    setReviewWorking(true);
+    setStatusMsg('');
+    try {
+      const data = await requestJson<{ message?: string }>('/api/user/reviews', { ...reviewForm });
+      setStatusMsg(data.message || 'Review submitted.');
+      setReviewForm({
+        booking_id: 0,
+        overall_rating: 5,
+        cleanliness_rating: 5,
+        dining_rating: 5,
+        staff_rating: 5,
+        title: '',
+        comment: ''
+      });
+      await fetchPortalData();
+    } catch (error) {
+      setStatusMsg(error instanceof Error ? error.message : 'Could not submit review.');
+    } finally {
+      setReviewWorking(false);
+    }
+  };
+
   // === Feature 3: Profile Edit Handlers ===
   const openProfileEdit = () => {
     if (guest) {
@@ -709,7 +805,7 @@ export const UserPortal: React.FC = () => {
   }
 
   const nights = nightsBetween(bookingDates.check_in, bookingDates.check_out);
-  const selectedNightly = selectedRoom ? Number(selectedRoom.price_per_night) : 0;
+  const selectedNightly = selectedRoom ? Number(selectedRoom.dynamic_price ?? selectedRoom.price_per_night) : 0;
   const addonTotal = addonOptions
     .filter((addon) => bookingAddons.includes(addon.id))
     .reduce((sum, addon) => sum + addon.price, 0);
@@ -810,6 +906,18 @@ export const UserPortal: React.FC = () => {
           <BillingCard invoices={invoices} />
         </section>
 
+        <section className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-8 mb-12">
+          <DigitalKeyCard digitalKey={digitalKey} />
+          <FeedbackCard
+            eligibleReviews={eligibleReviews}
+            reviewForm={reviewForm}
+            setReviewForm={setReviewForm}
+            onRatingChange={handleReviewRatingChange}
+            onSubmit={handleSubmitReview}
+            isWorking={reviewWorking}
+          />
+        </section>
+
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           <SavedOffersCard savedOfferCodes={savedOfferCodes} onToggle={handleToggleSavedOffer} isWorking={isWorking} />
         </section>
@@ -850,6 +958,44 @@ export const UserPortal: React.FC = () => {
             )}
           </section>
         )}
+
+                {/* ── IN-ROOM SERVICE REQUESTS ── */}
+        <section className="mb-12">
+          <div className="rounded-[28px] border border-[#006B5C]/30 bg-gradient-to-br from-[#006B5C]/15 to-[#00C9A7]/5 p-8">
+            <div className="flex items-center gap-4 mb-7">
+              <div className="w-14 h-14 rounded-2xl bg-[#006B5C]/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-2xl">🛎️</span>
+              </div>
+              <div>
+                <h2 className="font-luxury text-2xl font-black text-white">In-Room Services</h2>
+                {activeBookings.length > 0
+                  ? <p className="text-white/50 font-bold text-sm mt-0.5">Request housekeeping, maintenance &amp; more — anytime.</p>
+                  : <p className="text-yellow-400/80 font-bold text-sm mt-0.5">⚠️ You need an active check-in to request services.</p>
+                }
+              </div>
+            </div>
+            {activeBookings.length > 0
+              ? <ServiceRequestPanel authHeaders={authHeaders} />
+              : <p className="text-white/30 text-sm font-bold text-center py-6">Book a room and check in to use in-room services.</p>
+            }
+          </div>
+        </section>
+
+        {/* ── NEARBY ATTRACTIONS MAP ── */}
+        <section className="mb-12">
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-8">
+            <div className="flex items-center gap-4 mb-7">
+              <div className="w-14 h-14 rounded-2xl bg-[#e7c987]/15 flex items-center justify-center flex-shrink-0">
+                <MapPin className="w-7 h-7 text-[#e7c987]" />
+              </div>
+              <div>
+                <h2 className="font-luxury text-2xl font-black text-white">Explore Nearby</h2>
+                <p className="text-white/50 font-bold text-sm mt-0.5">Restaurants, temples, malls, parks — curated by our concierge.</p>
+              </div>
+            </div>
+            <NearbyAttractionsMap />
+          </div>
+        </section>
 
         <section className="mb-12">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
@@ -912,7 +1058,7 @@ export const UserPortal: React.FC = () => {
                     <h3 className="text-2xl font-luxury font-black text-white mb-4">Room {room.room_number}</h3>
                     <div className="flex items-center justify-between mb-5">
                       <span className="text-white/45 font-bold">Per night</span>
-                      <span className="text-xl text-[#e7c987] font-black">Rs {formatCurrency(room.price_per_night)}</span>
+                      <span className="text-xl text-[#e7c987] font-black">Rs {formatCurrency(room.dynamic_price ?? room.price_per_night)}</span>
                     </div>
                     <button
                       onClick={() => {
@@ -977,7 +1123,7 @@ export const UserPortal: React.FC = () => {
                   Room {selectedRoom.room_number} • {selectedRoom.type}
                 </h2>
                 <p className="text-white/55 font-bold">
-                  Rs {formatCurrency(selectedRoom.price_per_night)} / night • {nights} night(s)
+                  Rs {formatCurrency(selectedRoom.dynamic_price ?? selectedRoom.price_per_night)} / night • {nights} night(s)
                 </p>
               </div>
               <button
@@ -1417,6 +1563,153 @@ const BillingCard: React.FC<{ invoices: Invoice[] }> = ({ invoices }) => (
   </section>
 );
 
+const qrCellsForPayload = (payload: string) => {
+  let hash = 0;
+  for (let index = 0; index < payload.length; index += 1) {
+    hash = (hash * 31 + payload.charCodeAt(index)) >>> 0;
+  }
+  return Array.from({ length: 21 * 21 }, (_, index) => {
+    const x = index % 21;
+    const y = Math.floor(index / 21);
+    const finder =
+      (x < 7 && y < 7) ||
+      (x > 13 && y < 7) ||
+      (x < 7 && y > 13);
+    if (finder) {
+      const localX = x < 7 ? x : x - 14;
+      const localY = y < 7 ? y : y - 14;
+      return localX === 0 || localX === 6 || localY === 0 || localY === 6 || (localX >= 2 && localX <= 4 && localY >= 2 && localY <= 4);
+    }
+    const mixed = (hash + x * 17 + y * 29 + index * 7) % 11;
+    return mixed === 0 || mixed === 3 || mixed === 7;
+  });
+};
+
+const QrMatrix: React.FC<{ payload: string }> = ({ payload }) => {
+  const cells = useMemo(() => qrCellsForPayload(payload), [payload]);
+  return (
+    <div className="grid h-36 w-36 grid-cols-[repeat(21,1fr)] gap-px rounded-2xl bg-white p-3 shadow-inner" aria-label="Digital key QR code">
+      {cells.map((active, index) => (
+        <span key={index} className={active ? 'rounded-[1px] bg-black' : 'bg-transparent'} />
+      ))}
+    </div>
+  );
+};
+
+const DigitalKeyCard: React.FC<{ digitalKey: DigitalKey | null }> = ({ digitalKey }) => (
+  <section className="overflow-hidden rounded-[28px] border border-[#d6b16a]/20 bg-gradient-to-br from-[#d6b16a]/16 via-white/[0.06] to-white/[0.03] p-6">
+    <div className="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#e7c987]">Digital Key</p>
+        <h2 className="mt-2 font-luxury text-4xl text-white">Smart room access</h2>
+      </div>
+      <QrCode className="h-7 w-7 text-[#e7c987]" />
+    </div>
+    {digitalKey ? (
+      <div className="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div>
+          <p className="text-sm font-bold text-white/55">Room {digitalKey.room_number} · {digitalKey.room_type}</p>
+          <div className="my-5 flex gap-2">
+            {digitalKey.access_code.split('').map((digit, index) => (
+              <span key={`${digit}-${index}`} className="flex h-14 w-11 items-center justify-center rounded-2xl bg-black/35 text-2xl font-black text-white ring-1 ring-white/10">
+                {digit}
+              </span>
+            ))}
+          </div>
+          <p className="text-sm font-bold text-white/45">
+            Expires {formatDate(digitalKey.expires_at)} at checkout. Status: {digitalKey.status}.
+          </p>
+        </div>
+        <QrMatrix payload={digitalKey.qr_payload} />
+      </div>
+    ) : (
+      <div className="rounded-3xl bg-black/25 p-6 text-center">
+        <Key className="mx-auto mb-4 h-10 w-10 text-[#e7c987]" />
+        <p className="font-black text-white">No active key right now</p>
+        <p className="mt-2 text-sm font-bold text-white/45">A secure six-digit code appears automatically after check-in.</p>
+      </div>
+    )}
+  </section>
+);
+
+const FeedbackCard: React.FC<{
+  eligibleReviews: EligibleReview[];
+  reviewForm: ReviewForm;
+  setReviewForm: React.Dispatch<React.SetStateAction<ReviewForm>>;
+  onRatingChange: (key: keyof Pick<ReviewForm, 'overall_rating' | 'cleanliness_rating' | 'dining_rating' | 'staff_rating'>, value: number) => void;
+  onSubmit: () => void;
+  isWorking: boolean;
+}> = ({ eligibleReviews, reviewForm, setReviewForm, onRatingChange, onSubmit, isWorking }) => (
+  <section className="rounded-[28px] border border-white/10 bg-white/[0.06] p-6">
+    <div className="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.22em] text-[#e7c987]">Feedback</p>
+        <h2 className="mt-2 font-luxury text-4xl text-white">Rate your stay</h2>
+      </div>
+      <Star className="h-7 w-7 text-[#e7c987]" />
+    </div>
+    {eligibleReviews.length > 0 ? (
+      <div className="space-y-4">
+        <select
+          value={reviewForm.booking_id}
+          onChange={(event) => setReviewForm((current) => ({ ...current, booking_id: Number(event.target.value) }))}
+          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 font-bold text-white outline-none"
+        >
+          {eligibleReviews.map((booking) => (
+            <option key={booking.booking_id} value={booking.booking_id}>
+              Room {booking.room_number} · {formatDate(booking.check_out)}
+            </option>
+          ))}
+        </select>
+        <RatingRow label="Overall" value={reviewForm.overall_rating} onChange={(value) => onRatingChange('overall_rating', value)} />
+        <RatingRow label="Cleanliness" value={reviewForm.cleanliness_rating} onChange={(value) => onRatingChange('cleanliness_rating', value)} />
+        <RatingRow label="Dining" value={reviewForm.dining_rating} onChange={(value) => onRatingChange('dining_rating', value)} />
+        <RatingRow label="Staff" value={reviewForm.staff_rating} onChange={(value) => onRatingChange('staff_rating', value)} />
+        <input
+          value={reviewForm.title}
+          onChange={(event) => setReviewForm((current) => ({ ...current, title: event.target.value }))}
+          placeholder="Review title"
+          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 font-bold text-white outline-none placeholder:text-white/35"
+        />
+        <textarea
+          value={reviewForm.comment}
+          onChange={(event) => setReviewForm((current) => ({ ...current, comment: event.target.value }))}
+          placeholder="Share a short note"
+          className="min-h-24 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 font-bold text-white outline-none placeholder:text-white/35"
+        />
+        <button
+          onClick={onSubmit}
+          disabled={isWorking}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#d6b16a] px-5 py-3 font-black text-black disabled:opacity-60"
+        >
+          <Send className="h-4 w-4" />
+          {isWorking ? 'Submitting...' : 'Submit Review'}
+        </button>
+      </div>
+    ) : (
+      <p className="rounded-3xl bg-black/25 px-4 py-8 text-center font-bold text-white/45">
+        Feedback opens here after checkout for completed stays.
+      </p>
+    )}
+  </section>
+);
+
+const RatingRow: React.FC<{ label: string; value: number; onChange: (value: number) => void }> = ({ label, value, onChange }) => (
+  <div className="flex items-center justify-between gap-4 rounded-2xl bg-black/25 px-4 py-3">
+    <span className="font-bold text-white/65">{label}</span>
+    <div className="flex gap-1">
+      {Array.from({ length: 5 }).map((_, index) => {
+        const rating = index + 1;
+        return (
+          <button key={rating} type="button" onClick={() => onChange(rating)} className="text-[#e7c987]" aria-label={`${label} ${rating} stars`}>
+            <Star className={`h-5 w-5 ${rating <= value ? 'fill-current' : 'opacity-30'}`} />
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
 const SavedOffersCard: React.FC<{
   savedOfferCodes: Set<string>;
   onToggle: (offerCode: string, offerTitle: string) => void;
@@ -1509,6 +1802,16 @@ const BookingList: React.FC<BookingListProps> = ({ title, emptyText, bookings, o
                 >
                   <Repeat2 className="h-4 w-4" />
                   Rebook
+                </button>
+              )}
+              {booking.status.toLowerCase() !== 'cancelled' && booking.status.toLowerCase() !== 'checked_out' && (
+                <button
+                  type="button"
+                  onClick={() => window.open(`/user/boarding-pass/${booking.booking_id}`, '_blank')}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#d6b16a] px-4 py-2 text-sm font-black text-black hover:bg-[#e7c987] transition-all shadow-[0_0_15px_rgba(214,177,106,0.2)]"
+                >
+                  <QrCode className="h-4 w-4" />
+                  Boarding Pass
                 </button>
               )}
             </div>

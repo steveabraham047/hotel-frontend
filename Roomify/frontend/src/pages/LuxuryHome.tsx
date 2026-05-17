@@ -83,6 +83,18 @@ interface DiningShowcase {
   dessert_week_subtitle: string;
 }
 
+interface PublicReview {
+  review_id: number;
+  overall_rating: number;
+  cleanliness_rating: number;
+  dining_rating: number;
+  staff_rating: number;
+  title?: string | null;
+  comment?: string | null;
+  guest_name: string;
+  room_type: string;
+}
+
 const todayInput = () => new Date().toISOString().slice(0, 10);
 
 const futureInput = (days: number) => {
@@ -178,6 +190,7 @@ export const LuxuryHome: React.FC = () => {
   const [publicOffers, setPublicOffers] = useState<OfferView[]>(fallbackOfferViews);
   const [diningDishes, setDiningDishes] = useState<DiningDish[]>([]);
   const [diningShowcase, setDiningShowcase] = useState<DiningShowcase>(fallbackDiningShowcase);
+  const [publicReviews, setPublicReviews] = useState<PublicReview[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<LuxuryRoom | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [bookingRoom, setBookingRoom] = useState<LuxuryRoom | null>(null);
@@ -278,6 +291,26 @@ export const LuxuryHome: React.FC = () => {
     };
 
     fetchDining();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchReviews = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/public/reviews`);
+        const data = await readApiResponse<PublicReview[] | { error?: string }>(response);
+        if (!response.ok || !Array.isArray(data)) throw new Error('Could not load reviews.');
+        if (isMounted) setPublicReviews(data);
+      } catch {
+        if (isMounted) setPublicReviews([]);
+      }
+    };
+
+    fetchReviews();
     return () => {
       isMounted = false;
     };
@@ -611,7 +644,7 @@ export const LuxuryHome: React.FC = () => {
         <DiningSection showcase={diningShowcase} dishes={diningDishes} />
         <ExperiencesSection />
         <MembershipSection />
-        <ReviewsSection />
+        <ReviewsSection reviews={publicReviews} />
         <ContactSection />
       </main>
 
@@ -1314,31 +1347,49 @@ const MembershipSection: React.FC = () => {
   );
 };
 
-const ReviewsSection: React.FC = () => (
-  <section id="reviews" className="bg-[#11100e] px-5 py-24 lg:px-8">
-    <div className="mx-auto max-w-7xl">
-      <SectionHeading
-        eyebrow="Reviews"
-        title="Trust, shown quietly."
-        copy="Ratings, highlights, and guest voices help support conversion without crowding the page."
-      />
-      <div className="grid gap-6 md:grid-cols-3">
-        {testimonials.map((review) => (
-          <article key={review.name} className="rounded-[28px] border border-white/10 bg-white/[0.05] p-7">
-            <div className="mb-5 flex gap-1 text-[#e7c987]">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Star key={index} className="h-4 w-4 fill-current" />
-              ))}
-            </div>
-            <p className="min-h-28 leading-8 text-white/70">"{review.quote}"</p>
-            <p className="mt-6 font-black text-white">{review.name}</p>
-            <p className="text-sm font-bold text-white/42">{review.rating} rating</p>
-          </article>
-        ))}
+const ReviewsSection: React.FC<{ reviews: PublicReview[] }> = ({ reviews }) => {
+  const liveReviews = reviews.length > 0
+    ? reviews.map((review) => ({
+        key: `review-${review.review_id}`,
+        name: review.guest_name,
+        quote: review.comment || review.title || 'A polished, comfortable stay with thoughtful service.',
+        rating: review.overall_rating,
+        sub: `${review.room_type} stay · Clean ${review.cleanliness_rating}/5 · Dining ${review.dining_rating}/5`
+      }))
+    : testimonials.map((review) => ({
+        key: review.name,
+        name: review.name,
+        quote: review.quote,
+        rating: 5,
+        sub: `${review.rating} rating`
+      }));
+
+  return (
+    <section id="reviews" className="bg-[#11100e] px-5 py-24 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <SectionHeading
+          eyebrow="Reviews"
+          title={reviews.length > 0 ? 'Recent guest reviews.' : 'Trust, shown quietly.'}
+          copy="Moderated guest feedback from completed stays gives the hotel website a living voice."
+        />
+        <div className="grid gap-6 md:grid-cols-3">
+          {liveReviews.slice(0, 6).map((review) => (
+            <article key={review.key} className="rounded-[28px] border border-white/10 bg-white/[0.05] p-7">
+              <div className="mb-5 flex gap-1 text-[#e7c987]">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star key={index} className={`h-4 w-4 ${index < review.rating ? 'fill-current' : 'opacity-25'}`} />
+                ))}
+              </div>
+              <p className="min-h-28 leading-8 text-white/70">"{review.quote}"</p>
+              <p className="mt-6 font-black text-white">{review.name}</p>
+              <p className="text-sm font-bold text-white/42">{review.sub}</p>
+            </article>
+          ))}
+        </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const ContactSection: React.FC = () => (
   <section id="contact" className="mx-auto max-w-7xl px-5 py-24 lg:px-8">

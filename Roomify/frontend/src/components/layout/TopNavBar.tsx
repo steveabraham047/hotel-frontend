@@ -1,11 +1,13 @@
 import React from 'react';
+import { NotificationBell } from '../NotificationPanel';
 
 // Accept the onMenuClick prop from AppLayout
 interface TopNavBarProps {
   onMenuClick: () => void;
+  onNotificationClick: () => void;
 }
 
-export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuClick }) => {
+export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuClick, onNotificationClick }) => {
   return (
     <header className="fixed top-0 left-0 right-0 lg:left-[340px] h-28 z-30 flex items-center justify-between px-4 lg:px-8 pointer-events-none">
       
@@ -36,9 +38,7 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({ onMenuClick }) => {
 
       {/* Profile & Notifications */}
       <div className="flex items-center gap-4 pointer-events-auto ml-auto">
-        <button className="w-12 h-12 bg-white/70 backdrop-blur-md rounded-full flex items-center justify-center text-primary shadow-sm hover:bg-white transition-all">
-          <span className="material-symbols-outlined">notifications</span>
-        </button>
+        <NotificationBell onClick={onNotificationClick} />
         <div className="w-12 h-12 bg-primary rounded-full overflow-hidden border-2 border-white shadow-sm">
           <img src="https://ui-avatars.com/api/?name=Admin+User&background=0D3B2E&color=fff" alt="Profile" className="w-full h-full object-cover" />
         </div>

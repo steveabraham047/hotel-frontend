@@ -1,341 +1,31 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Coffee, Flame, Minus, Plus, Receipt, Search, Sparkles, Utensils, CheckCircle2, Trash2, Save, Bell, BedDouble, CheckCheck, RefreshCw, Clock } from 'lucide-react';
-import { API_BASE_URL } from '../config/api';
-import { readApiResponse } from '../utils/apiResponse';
+const fs = require('fs');
+const path = 'src/pages/RestaurantPOS.tsx';
+let c = fs.readFileSync(path, 'utf8');
+const lines = c.split('\n');
 
-type OrderType = 'room' | 'walk-in';
-type MenuCategory = 'All' | 'Best Sellers' | 'Starters' | 'Mains' | 'Drinks' | 'Desserts';
+// Line 320 (0-indexed: 319) is "  return (" — the main return
+// Line 321 (0-indexed: 320) is '    <div className="flex flex-col lg:flex-row h-[85vh] gap-6">'
+console.log('Line 319:', JSON.stringify(lines[319]));
+console.log('Line 320:', JSON.stringify(lines[320]));
+console.log('Line 321:', JSON.stringify(lines[321]));
 
-interface MenuItem {
-  id: number;
-  name: string;
-  category: Exclude<MenuCategory, 'All' | 'Best Sellers'>;
-  price: number;
-  image_url?: string | null;
-  description?: string | null;
-  bestseller?: boolean;
-  chefPick?: boolean;
-  dessertWeek?: boolean;
-}
+// The main return starts at index 319, goes to end of file at index 616 (last line = 617)
+// We'll replace everything from line 320 onward (the content inside return)
 
-interface CartItem extends MenuItem {
-  qty: number;
-}
-
-interface RoomOrder {
-  order_id: number;
-  total_amount: number;
-  status: string;
-  order_type: string;
-  created_at: string;
-  room_number: string;
-  guest_name: string;
-  guest_phone: string;
-  notes: string | null;
-}
-
-interface Room {
-  room_id: number;
-  room_number: string;
-  status: string;
-}
-
-const MENU_CATEGORIES: MenuCategory[] = ['All', 'Best Sellers', 'Starters', 'Mains', 'Drinks', 'Desserts'];
-
-export const RestaurantPOS: React.FC = () => {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [activeCategory, setActiveCategory] = useState<MenuCategory>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [orderType, setOrderType] = useState<OrderType>('room');
-  const [selectedRoom, setSelectedRoom] = useState('');
-  const [occupiedRooms, setOccupiedRooms] = useState<Room[]>([]);
-  const [orderNote, setOrderNote] = useState('');
-  const [statusMsg, setStatusMsg] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
-  const [isSavingItem, setIsSavingItem] = useState(false);
-  const [showAdminMenuEditor, setShowAdminMenuEditor] = useState(false);
-  const [newItem, setNewItem] = useState({
-    name: '',
-    category: 'Mains' as Exclude<MenuCategory, 'All' | 'Best Sellers'>,
-    price: '',
-    image_url: '',
-    description: '',
-    is_bestseller: false,
-    is_chef_pick: false,
-    is_dessert_week: false
-  });
-
-  const userRole = (localStorage.getItem('role') || '').toLowerCase();
-  const isAdmin = userRole === 'admin';
-  const [activeTab, setActiveTab] = useState<'pos' | 'room-orders'>('pos');
-  const [roomOrders, setRoomOrders] = useState<RoomOrder[]>([]);
-  const [roomOrdersLoading, setRoomOrdersLoading] = useState(false);
-  const [servingId, setServingId] = useState<number | null>(null);
-  const [roomOrderMsg, setRoomOrderMsg] = useState('');
-
-  useEffect(() => {
-    const fetchRooms = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/api/rooms`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await readApiResponse<Room[] | { error?: string }>(response);
-        if (!response.ok || !Array.isArray(data)) return;
-        setOccupiedRooms(data.filter((room) => String(room.status).toLowerCase() === 'occupied'));
-      } catch {
-        // Keep UI usable even if rooms fail to load.
-      }
-    };
-    fetchRooms();
-  }, []);
-
-  const fetchMenu = async () => {
-    setIsLoadingMenu(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/restaurant/menu`);
-      const data = await readApiResponse<any[] | { error?: string }>(response);
-      if (!response.ok || !Array.isArray(data)) throw new Error(('error' in data && data.error) || 'Failed to fetch menu.');
-      setMenuItems(
-        data.map((item) => ({
-          id: Number(item.menu_item_id),
-          name: item.name,
-          category: item.category,
-          price: Number(item.price),
-          image_url: item.image_url,
-          description: item.description,
-          bestseller: Boolean(item.is_bestseller),
-          chefPick: Boolean(item.is_chef_pick),
-          dessertWeek: Boolean(item.is_dessert_week)
-        }))
-      );
-    } catch {
-      setStatusMsg('Unable to load menu from backend.');
-      setMenuItems([]);
-    } finally {
-      setIsLoadingMenu(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchMenu();
-  }, []);
-
-  const addToCart = (item: MenuItem) => {
-    setCart((current) => {
-      const existing = current.find((cartItem) => cartItem.id === item.id);
-      if (existing) {
-        return current.map((cartItem) =>
-          cartItem.id === item.id ? { ...cartItem, qty: cartItem.qty + 1 } : cartItem
-        );
-      }
-      return [...current, { ...item, qty: 1 }];
-    });
-  };
-
-  const updateQty = (id: number, delta: number) => {
-    setCart((current) =>
-      current
-        .map((item) => (item.id === id ? { ...item, qty: Math.max(0, item.qty + delta) } : item))
-        .filter((item) => item.qty > 0)
-    );
-  };
-
-  const clearCart = () => {
-    setCart([]);
-    setOrderNote('');
-  };
-
-  const filteredMenu = useMemo(() => {
-    const byCategory = menuItems.filter((item) => {
-      if (activeCategory === 'All') return true;
-      if (activeCategory === 'Best Sellers') return Boolean(item.bestseller);
-      return item.category === activeCategory;
-    });
-
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return byCategory;
-    return byCategory.filter((item) => item.name.toLowerCase().includes(query));
-  }, [activeCategory, searchQuery, menuItems]);
-
-  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
-  const tax = useMemo(() => subtotal * 0.05, [subtotal]);
-  const total = useMemo(() => subtotal + tax, [subtotal, tax]);
-  const itemCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart]);
-
-  const fetchRoomOrders = async () => {
-    setRoomOrdersLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/restaurant/room-orders`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) setRoomOrders(await res.json());
-    } catch { /* ignore */ }
-    finally { setRoomOrdersLoading(false); }
-  };
-
-  const handleServeOrder = async (orderId: number) => {
-    setServingId(orderId);
-    setRoomOrderMsg('');
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/restaurant/room-orders/${orderId}/serve`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setRoomOrderMsg('✅ Order marked as served. Charge is on the room bill.');
-        await fetchRoomOrders();
-      }
-    } catch { /* ignore */ }
-    finally { setServingId(null); }
-  };
-
-  // Auto-refresh room orders every 30s when on that tab
-  useEffect(() => {
-    if (activeTab !== 'room-orders') return;
-    fetchRoomOrders();
-    const interval = setInterval(fetchRoomOrders, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab]);
-
-  const handlePlaceOrder = async () => {
-    setStatusMsg('');
-    if (cart.length === 0) {
-      setStatusMsg('Add at least one item to place an order.');
-      return;
-    }
-    if (orderType === 'room' && !selectedRoom) {
-      setStatusMsg('Select an occupied room for room-charge orders.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/restaurant/order`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          orderType,
-          selectedRoom,
-          cart,
-          total,
-          note: orderNote
-        })
-      });
-
-      const data = await readApiResponse<{ error?: string; message?: string }>(response);
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to place order.');
-      }
-
-      setIsSuccess(true);
-    } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : 'Cannot connect to the secure server.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleCreateMenuItem = async () => {
-    if (!isAdmin) return;
-    if (!newItem.name.trim() || !newItem.price) {
-      setStatusMsg('Item name and price are required.');
-      return;
-    }
-
-    setIsSavingItem(true);
-    setStatusMsg('');
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/restaurant/menu/admin`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: newItem.name.trim(),
-          category: newItem.category,
-          price: Number(newItem.price),
-          image_url: newItem.image_url || null,
-          description: newItem.description || null,
-          is_bestseller: newItem.is_bestseller,
-          is_chef_pick: newItem.is_chef_pick,
-          is_dessert_week: newItem.is_dessert_week
-        })
-      });
-      const data = await readApiResponse<{ error?: string }>(response);
-      if (!response.ok) throw new Error(data.error || 'Failed to create menu item.');
-      setNewItem({
-        name: '',
-        category: 'Mains',
-        price: '',
-        image_url: '',
-        description: '',
-        is_bestseller: false,
-        is_chef_pick: false,
-        is_dessert_week: false
-      });
-      await fetchMenu();
-      setStatusMsg('Menu item created successfully.');
-    } catch (error) {
-      setStatusMsg(error instanceof Error ? error.message : 'Failed to create menu item.');
-    } finally {
-      setIsSavingItem(false);
-    }
-  };
-
-  if (isSuccess) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-white/60 backdrop-blur-xl rounded-3xl p-12 border border-white/40 shadow-xl h-[80vh]">
-        <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
-          <CheckCircle2 className="w-12 h-12 text-emerald-600" />
-        </div>
-        <h2 className="text-3xl font-headline font-bold text-primary mb-2">Order Confirmed!</h2>
-        <p className="text-on-surface-variant font-medium mb-8 text-center max-w-md">
-          {orderType === 'room'
-            ? `Rs ${total.toFixed(2)} has been added to Room ${selectedRoom}'s tab.`
-            : `Walk-in order for Rs ${total.toFixed(2)} has been recorded as paid.`}
-        </p>
-        <button
-          onClick={() => {
-            setIsSuccess(false);
-            setCart([]);
-            setSelectedRoom('');
-            setOrderNote('');
-            setStatusMsg('');
-          }}
-          className="px-8 py-4 bg-primary text-white rounded-full font-bold hover:bg-primary-container transition-all"
-        >
-          Start New Order
-        </button>
-      </div>
-    );
-  }
-
-  return (
+const NEW_CONTENT = `  return (
     <div className="flex flex-col gap-4">
 
       {/* Tab Switcher */}
       <div className="flex gap-3">
         <button
           onClick={() => setActiveTab('pos')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'pos' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white/60 text-primary/60 border border-white/40 hover:bg-white hover:text-primary'}`}
+          className={\`flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-widest transition-all \${activeTab === 'pos' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white/60 text-primary/60 border border-white/40 hover:bg-white hover:text-primary'}\`}
         >
           <Utensils className="w-4 h-4" /> POS Terminal
         </button>
         <button
           onClick={() => { setActiveTab('room-orders'); fetchRoomOrders(); }}
-          className={`relative flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-widest transition-all ${activeTab === 'room-orders' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-white/60 text-primary/60 border border-white/40 hover:bg-white hover:text-primary'}`}
+          className={\`relative flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm uppercase tracking-widest transition-all \${activeTab === 'room-orders' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-white/60 text-primary/60 border border-white/40 hover:bg-white hover:text-primary'}\`}
         >
           <Bell className="w-4 h-4" /> Room Orders
           {roomOrders.length > 0 && (
@@ -364,10 +54,10 @@ export const RestaurantPOS: React.FC = () => {
           )}
 
           {roomOrdersLoading ? (
-            <div className="text-center py-12 text-primary/40 font-bold">Loading orders…</div>
+            <div className="text-center py-12 text-primary/40 font-bold">Loading orders\u2026</div>
           ) : roomOrders.length === 0 ? (
             <div className="text-center py-16 bg-white/40 rounded-2xl border border-white/60">
-              <span className="text-5xl block mb-3">🍽️</span>
+              <span className="text-5xl block mb-3">\ud83c\udf7d\ufe0f</span>
               <p className="font-black text-primary">No pending room orders!</p>
               <p className="text-primary/50 text-sm font-bold mt-1">When guests order food from their portal, it appears here.</p>
             </div>
@@ -386,7 +76,7 @@ export const RestaurantPOS: React.FC = () => {
                       </div>
                     </div>
                     <span className="text-emerald-700 font-black text-sm bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
-                      ₹{Number(order.total_amount).toFixed(2)}
+                      \u20b9{Number(order.total_amount).toFixed(2)}
                     </span>
                   </div>
                   {order.notes && (
@@ -405,7 +95,7 @@ export const RestaurantPOS: React.FC = () => {
                     className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
                   >
                     <CheckCheck className="w-4 h-4" />
-                    {servingId === order.order_id ? 'Marking…' : 'Mark Served → Bill to Room'}
+                    {servingId === order.order_id ? 'Marking\u2026' : 'Mark Served \u2192 Bill to Room'}
                   </button>
                 </div>
               ))}
@@ -514,7 +204,7 @@ export const RestaurantPOS: React.FC = () => {
                 <button
                   key={category}
                   onClick={() => setActiveCategory(category)}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${activeCategory === category ? 'bg-primary text-white shadow-md' : 'bg-white/70 text-primary/60 hover:bg-white hover:text-primary'}`}
+                  className={\`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all \${activeCategory === category ? 'bg-primary text-white shadow-md' : 'bg-white/70 text-primary/60 hover:bg-white hover:text-primary'}\`}
                 >
                   {category}
                 </button>
@@ -619,13 +309,13 @@ export const RestaurantPOS: React.FC = () => {
             <div className="flex bg-surface-variant/50 rounded-xl p-1 mb-4 border border-outline-variant/20">
               <button
                 onClick={() => setOrderType('room')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${orderType === 'room' ? 'bg-white text-primary shadow-sm' : 'text-primary/50 hover:text-primary'}`}
+                className={\`flex-1 py-2 text-sm font-bold rounded-lg transition-all \${orderType === 'room' ? 'bg-white text-primary shadow-sm' : 'text-primary/50 hover:text-primary'}\`}
               >
                 Room Charge
               </button>
               <button
                 onClick={() => setOrderType('walk-in')}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${orderType === 'walk-in' ? 'bg-white text-primary shadow-sm' : 'text-primary/50 hover:text-primary'}`}
+                className={\`flex-1 py-2 text-sm font-bold rounded-lg transition-all \${orderType === 'walk-in' ? 'bg-white text-primary shadow-sm' : 'text-primary/50 hover:text-primary'}\`}
               >
                 Walk-in
               </button>
@@ -672,7 +362,7 @@ export const RestaurantPOS: React.FC = () => {
             <button
               onClick={handlePlaceOrder}
               disabled={isSubmitting}
-              className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-lg ${cart.length > 0 ? 'bg-secondary text-on-secondary hover:bg-secondary-container hover:scale-[1.01]' : 'bg-surface-variant text-on-surface-variant/50 cursor-not-allowed'} disabled:opacity-60`}
+              className={\`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-lg \${cart.length > 0 ? 'bg-secondary text-on-secondary hover:bg-secondary-container hover:scale-[1.01]' : 'bg-surface-variant text-on-surface-variant/50 cursor-not-allowed'} disabled:opacity-60\`}
             >
               {orderType === 'room' ? 'Send to Room Tab' : 'Process Walk-in Payment'}
               <CheckCircle2 className="w-5 h-5" />
@@ -684,3 +374,10 @@ export const RestaurantPOS: React.FC = () => {
     </div>
   );
 };
+`;
+
+// Replace from line 319 (index 319) to end
+const before = lines.slice(0, 319).join('\n');
+const result = before + '\n' + NEW_CONTENT;
+fs.writeFileSync(path, result, 'utf8');
+console.log('File rewritten. Total chars:', result.length);

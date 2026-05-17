@@ -68,3 +68,16 @@ html {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
   40%            { transform: translateY(-6px); opacity: 1; }
 }
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0.8; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
